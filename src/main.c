@@ -14,7 +14,7 @@
 #include <debug.h>
 
 #include <stdint.h>
-#include <time.h>
+#include <stdbool.h>
 
 #include <graphx.h>
 #include <keypadc.h>
@@ -24,42 +24,45 @@
 const uint24_t WIDTH = GFX_LCD_WIDTH;
 const uint8_t HEIGHT = GFX_LCD_HEIGHT;
 
-typedef int24_t fixed;
+typedef int24_t fixed24_t;
 #define FRACTION_BITS 12
 
-inline fixed int_to_fp(uint24_t x) {
-	return (fixed)x << FRACTION_BITS;
+inline fixed24_t int_to_fp(uint24_t x) {
+	return (fixed24_t)x << FRACTION_BITS;
 }
 
-float fp_to_float(fixed x) {
+static const fixed24_t FP_ONE = 1 << FRACTION_BITS;
+
+float fp_to_float(fixed24_t x) {
 	return (float)x / (float)(1 << FRACTION_BITS);
 }
 
-fixed naive_fp_mul(fixed a, fixed b) {
+fixed24_t naive_fp_mul(fixed24_t a, fixed24_t b) {
 	return ((int32_t)a * (int32_t)b) / (1 << FRACTION_BITS);
 }
 
 typedef struct {
-	fixed real;
-	fixed imag;
-} complex;
+	fixed24_t real;
+	fixed24_t imag;
+} complex_t;
 
-// (a+ib)^2
-// a^2 + 2aib - b^2
+#define MAX_ITERATIONS 18
 
-// a^2 - b^2
-// (a+b)(a-b)
+/// returns how many interations it took to diverge or 0 if c is in the set
+uint8_t mandelbrot(complex_t c) {
+	static const fixed24_t fp_two = FP_ONE*2;
 
-/// returns how many interations
-uint8_t mandelbrot(complex c) {
-	complex z = { 0, 0 };
+	complex_t z = { 0, 0 };
 
-	dbg_printf("c = %li + i%li = %f + i%f\n", c.real, c.imag, fixed_to_float(c.real), fixed_to_float(c.imag));
-	for (uint8_t i = 0; i < 10; i++) {
-		dbg_printf("z = %li + i%li = %f + i%f\n", z.real, z.imag, fixed_to_float(z.real), fixed_to_float(z.imag));
-		if (z.real >= int_to_fp(2) || z.imag >= int_to_fp(2)) return i;
+	for (uint8_t i = 0; i < MAX_ITERATIONS; i++) {
+		if (z.real >= fp_two || z.imag >= fp_two) return i;
 
-		z = (complex) {
+		// (a+ib)^2
+		// a^2 - b^2 + 2aib 
+
+		// a^2 - b^2
+		// (a+b)(a-b)
+		z = (complex_t) {
 			fp_mul(z.real + z.imag, z.real - z.imag),
 			2*fp_mul(z.real, z.imag)
 		};
@@ -77,32 +80,46 @@ int main(void)
     gfx_SetDrawBuffer();
 	gfx_FillScreen(255);
 
-	int24_t zoom = 1;
-	for (uint8_t y = 0; y < HEIGHT; y+=4) {
-		for (uint24_t x = 0; x < WIDTH; x+=4) {
-			fixed fx = int_to_fp(x)*3/WIDTH  / zoom - int_to_fp(2);
-			fixed fy = int_to_fp(y)*2/HEIGHT / zoom - int_to_fp(1);
+	int24_t zoom = FP_ONE*2;
+	int24_t offsetx = -FP_ONE;
+	int24_t offsety = 0;
+	bool rendering = true;
+	while (rendering) {
+		for (uint8_t y = 0; y < HEIGHT; y += 4) {
+			for (uint24_t x = 0; x < WIDTH; x += 4) {
+				fixed24_t fx = fp_mul(int_to_fp(x)/HEIGHT - FP_ONE/2, zoom) + offsetx; // keep aspect ratio
+				fixed24_t fy = fp_mul(int_to_fp(y)/HEIGHT - FP_ONE/2, zoom) + offsety;
 
-			uint8_t i = mandelbrot((complex) { fx, fy });
-			if (i == 0) {
-				dbg_printf("got the mandel-bro!\n");
-				gfx_SetColor(0);
-				gfx_FillRectangle(x, y, 4, 4);
-			} else if (i < 8) {
-				gfx_SetColor(7 + i*32);
-				gfx_FillRectangle(x, y, 4, 4);
+				uint8_t i = mandelbrot((complex_t) { fx, fy });
+				if (i == 0) {
+					gfx_SetColor(0);
+					gfx_FillRectangle(x, y, 4, 4);
+				} else {
+					if (i <= 7) gfx_SetColor(i);
+					else if (i <= 14) gfx_SetColor(7 + i*32);
+					else if (i <= 18) gfx_SetColor(231 + i*8);
+					gfx_FillRectangle(x, y, 4, 4);
+				}
 			}
+			gfx_BlitBuffer();
 		}
-		gfx_BlitBuffer();
-		// kb_Scan();
-		// if (kb_Data[6] & kb_Enter) {
-		// 	zoom += 1;
-		// }
+
+		while (true) {
+			kb_Scan();
+			if (kb_Data[6] & kb_Clear || kb_Data[6] & kb_Annul || kb_Data[1] & kb_Del || kb_Data[1] & kb_Suppr)
+				rendering = false;
+			else if (kb_Data[6] & kb_Add) zoom = fp_mul(zoom, FP_ONE*2/3);
+			else if (kb_Data[6] & kb_Sub) zoom = fp_mul(zoom, FP_ONE*4/3);
+			else if (kb_Data[7] & kb_Left)  offsetx -= fp_mul(zoom, FP_ONE/4);
+			else if (kb_Data[7] & kb_Right) offsetx += fp_mul(zoom, FP_ONE/4);
+			else if (kb_Data[7] & kb_Up)    offsety -= fp_mul(zoom, FP_ONE/4);
+			else if (kb_Data[7] & kb_Down)  offsety += fp_mul(zoom, FP_ONE/4);
+			else continue;
+
+			break;
+		}
 	}
 
-	while (!kb_AnyKey()) {}
-
-	gfx_SetColor(0);
     gfx_End();
 
     return 0;
