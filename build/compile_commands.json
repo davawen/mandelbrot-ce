@@ -1,0 +1,29 @@
+[
+  {
+    "arguments": [
+      "/home/davawen/.local/bin/CEdev/bin/ez80-clang",
+      "-c",
+      "-emit-llvm",
+	  "-nostdinc",
+      "-isystem",
+      "/home/davawen/.local/bin/CEdev/include",
+      "-Isrc",
+      "-fno-threadsafe-statics",
+      "-Xclang",
+      "-mllvm",
+      "-DNDEBUG",
+      "-g0",
+      "-Oz",
+      "-W",
+      "-Wall",
+      "-Wextra",
+      "-Wwrite-strings",
+      "-o",
+      "obj/src/main.c.bc",
+      "src/main.c"
+    ],
+    "directory": "/mnt/Projects/Rust/bad-apple-ce/player",
+    "file": "/mnt/Projects/Rust/bad-apple-ce/player/src/main.c",
+    "output": "/mnt/Projects/Rust/bad-apple-ce/player/obj/src/main.c.bc"
+  }
+]
