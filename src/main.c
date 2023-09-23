@@ -110,11 +110,13 @@ void render(uint24_t startx, uint24_t endx, uint8_t starty, uint8_t endy, fixed2
 				gfx_FillRectangle(x, y, step, step);
 			}
 		}
+
+		if (kb_AnyKey()) break; // stop render
 		gfx_BlitBuffer();
 	}
 }
 
-void move_camera_x(fixed24_t *offsetx, fixed24_t amount, fixed24_t zoom, fixed24_t offsety) {
+void move_camera_x(fixed24_t *offsetx, fixed24_t amount, fixed24_t zoom, fixed24_t offsety, uint8_t step) {
 	*offsetx += fp_mul(zoom, amount);
 
 	int24_t offset = fp_to_int(amount * HEIGHT);
@@ -131,10 +133,10 @@ void move_camera_x(fixed24_t *offsetx, fixed24_t amount, fixed24_t zoom, fixed24
 
 	startx = offset > 0 ? WIDTH-offset : 0;
 	endx   = offset > 0 ? WIDTH        : -offset;
-	render(startx, endx, 0, HEIGHT, zoom, *offsetx, offsety, 4);
+	render(startx, endx, 0, HEIGHT, zoom, *offsetx, offsety, step);
 }
 
-void move_camera_y(fixed24_t *offsety, fixed24_t amount, fixed24_t zoom, fixed24_t offsetx) {
+void move_camera_y(fixed24_t *offsety, fixed24_t amount, fixed24_t zoom, fixed24_t offsetx, uint8_t step) {
 	*offsety += fp_mul(zoom, amount);
 
 	int24_t offset = fp_to_int(amount * HEIGHT);
@@ -151,7 +153,7 @@ void move_camera_y(fixed24_t *offsety, fixed24_t amount, fixed24_t zoom, fixed24
 
 	starty = offset > 0 ? HEIGHT-offset : 0;
 	endy   = offset > 0 ? HEIGHT        : -offset;
-	render(0, WIDTH, starty, endy, zoom, offsetx, *offsety, 4);
+	render(0, WIDTH, starty, endy, zoom, offsetx, *offsety, step);
 }
 
 int main(void)
@@ -164,6 +166,8 @@ int main(void)
 	fixed24_t offsetx = -FP_ONE;
 	fixed24_t offsety = 0;
 
+	uint8_t resolution = 4;
+
 	render(0, WIDTH, 0, HEIGHT, zoom, offsetx, offsety, 4);
 
 	bool rendering = true;
@@ -172,17 +176,25 @@ int main(void)
 		if (kb_Data[6] & kb_Clear || kb_Data[6] & kb_Annul || kb_Data[1] & kb_Del || kb_Data[1] & kb_Suppr)
 			rendering = false;
 
-		if (kb_Data[7] & kb_Left)       move_camera_x(&offsetx, -FP_ONE/4, zoom, offsety);
-		else if (kb_Data[7] & kb_Right) move_camera_x(&offsetx,  FP_ONE/4, zoom, offsety); 
-		else if (kb_Data[7] & kb_Up)    move_camera_y(&offsety, -FP_ONE/4, zoom, offsetx);
-		else if (kb_Data[7] & kb_Down)  move_camera_y(&offsety,  FP_ONE/4, zoom, offsetx);
-		else if (kb_Data[6] & kb_Enter) render(0, WIDTH, 0, HEIGHT, zoom, offsetx, offsety, 1);
+		if (kb_Data[7] & kb_Left)       move_camera_x(&offsetx, -FP_ONE/4, zoom, offsety, resolution);
+		else if (kb_Data[7] & kb_Right) move_camera_x(&offsetx,  FP_ONE/4, zoom, offsety, resolution); 
+		else if (kb_Data[7] & kb_Up)    move_camera_y(&offsety, -FP_ONE/4, zoom, offsetx, resolution);
+		else if (kb_Data[7] & kb_Down)  move_camera_y(&offsety,  FP_ONE/4, zoom, offsetx, resolution);
 		else {
 			if (kb_Data[6] & kb_Add) zoom = fp_mul(zoom, FP_ONE*2/3);
 			else if (kb_Data[6] & kb_Sub) zoom = fp_mul(zoom, FP_ONE*4/3);
+			else if (kb_Data[3] & kb_1) resolution = 1;
+			else if (kb_Data[4] & kb_2) resolution = 2;
+			else if (kb_Data[5] & kb_3) resolution = 3;
+			else if (kb_Data[3] & kb_4) resolution = 4;
+			else if (kb_Data[4] & kb_5) resolution = 5;
+			else if (kb_Data[5] & kb_6) resolution = 6;
+			else if (kb_Data[3] & kb_7) resolution = 7;
+			else if (kb_Data[4] & kb_8) resolution = 8;
+			else if (kb_Data[5] & kb_9) resolution = 9;
 			else continue; // don't render anything if there weren't any key press
 
-			render(0, WIDTH, 0, HEIGHT, zoom, offsetx, offsety, 4);
+			render(0, WIDTH, 0, HEIGHT, zoom, offsetx, offsety, resolution);
 		}
 
 	}
